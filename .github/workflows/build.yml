@@ -8,6 +8,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+
       - name: Baixar projeto
         uses: actions/checkout@v4
 
@@ -21,11 +22,27 @@ jobs:
         run: |
           rm -rf projeto
           mkdir projeto
-          unzip -q lampiao-hidden-1.21.11-completo.zip -d projeto
+
+          unzip -q lampiao-hidden-do-zero.zip -d projeto
+
+          echo "Conteúdo extraído:"
+          find projeto -maxdepth 3 -type f
+
+      - name: Encontrar pasta do projeto
+        run: |
+          PROJECT_DIR=$(find projeto -name build.gradle -type f -print -quit | xargs dirname)
+
+          if [ -z "$PROJECT_DIR" ]; then
+            echo "ERRO: build.gradle não encontrado."
+            exit 1
+          fi
+
+          echo "Projeto encontrado em: $PROJECT_DIR"
+          echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Corrigir build.gradle
         run: |
-          cd projeto
+          cd "$PROJECT_DIR"
 
           cat > build.gradle <<'EOF'
           plugins {
@@ -41,14 +58,20 @@ jobs:
           }
 
           repositories {
-              maven { url = 'https://maven.fabricmc.net/' }
+              maven {
+                  url = 'https://maven.fabricmc.net/'
+              }
+
               mavenCentral()
           }
 
           dependencies {
               minecraft "com.mojang:minecraft:${project.minecraft_version}"
+
               mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+
               modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
               modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
           }
 
@@ -66,14 +89,33 @@ jobs:
 
           java {
               withSourcesJar()
+
               sourceCompatibility = JavaVersion.VERSION_21
               targetCompatibility = JavaVersion.VERSION_21
           }
           EOF
 
+      - name: Corrigir gradle.properties
+        run: |
+          cd "$PROJECT_DIR"
+
+          cat > gradle.properties <<'EOF'
+          org.gradle.jvmargs=-Xmx2G
+
+          minecraft_version=1.21.11
+          yarn_mappings=1.21.11+build.6
+
+          loader_version=0.19.3
+          fabric_version=0.141.6+1.21.11
+
+          mod_version=1.0.0
+          maven_group=com.jczzwt
+          archives_base_name=lampiao-hidden
+          EOF
+
       - name: Corrigir codigo Java
         run: |
-          cd projeto
+          cd "$PROJECT_DIR"
 
           mkdir -p src/main/java/com/jczzwt/lampiaohidden
 
@@ -122,8 +164,9 @@ jobs:
                                   );
 
                           /*
-                           * Remove qualquer invisibilidade quando
-                           * o jogador NÃO estiver usando o Lampião.
+                           * Se não estiver usando o Lampião,
+                           * garante que o jogador não fique
+                           * invisível.
                            */
                           if (!active) {
                               player.removeStatusEffect(
@@ -131,6 +174,10 @@ jobs:
                               );
                           }
 
+                          /*
+                           * Só envia os pacotes quando o estado
+                           * muda.
+                           */
                           if (active != previous) {
 
                               states.put(
@@ -325,7 +372,8 @@ jobs:
                                   .getPlayerList()) {
 
                       /*
-                       * Nunca envia para o próprio jogador.
+                       * O próprio jogador nunca recebe
+                       * o pacote de esconder.
                        */
                       if (viewer != player) {
                           viewer.networkHandler.sendPacket(packet);
@@ -340,14 +388,15 @@ jobs:
         with:
           gradle-version: '9.6.1'
 
-      - name: Compilar
+      - name: Compilar mod
         run: |
-          cd projeto
+          cd "$PROJECT_DIR"
+
           gradle clean build --no-daemon
 
       - name: Disponibilizar JAR
         uses: actions/upload-artifact@v4
         with:
           name: lampiao-hidden
-          path: projeto/build/libs/*.jar
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
                      
