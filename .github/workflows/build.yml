@@ -24,9 +24,6 @@ jobs:
           mkdir projeto
           unzip -q lampiao-hidden-do-zero.zip -d projeto
 
-          echo "Arquivos encontrados:"
-          find projeto -maxdepth 4 -type f
-
       - name: Encontrar projeto
         run: |
           PROJECT_DIR=$(find projeto -name build.gradle -type f -print -quit | xargs dirname)
@@ -36,7 +33,7 @@ jobs:
             exit 1
           fi
 
-          echo "Projeto: $PROJECT_DIR"
+          echo "Projeto encontrado em: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Corrigir build.gradle
@@ -60,7 +57,6 @@ jobs:
               maven {
                   url = 'https://maven.fabricmc.net/'
               }
-
               mavenCentral()
           }
 
@@ -124,5 +120,123 @@ jobs:
           import net.minecraft.entity.effect.StatusEffectInstance;
           import net.minecraft.entity.effect.StatusEffects;
           import net.minecraft.item.ItemStack;
-          import net.minecraft
+          import net.minecraft.item.Items;
+          import net.minecraft.server.network.ServerPlayerEntity;
+
+          public class LampiaoHidden implements ModInitializer {
+
+              private static final String LAMPIAO_KEY = "lampiao_lendario";
+
+              @Override
+              public void onInitialize() {
+
+                  ServerTickEvents.END_SERVER_TICK.register(server -> {
+
+                      for (ServerPlayerEntity player :
+                              server.getPlayerManager().getPlayerList()) {
+
+                          if (isLampiao(player)) {
+
+                              player.addStatusEffect(
+                                      new StatusEffectInstance(
+                                              StatusEffects.INVISIBILITY,
+                                              10,
+                                              0,
+                                              false,
+                                              false,
+                                              true
+                                      )
+                              );
+
+                          } else {
+
+                              player.removeStatusEffect(
+                                      StatusEffects.INVISIBILITY
+                              );
+                          }
+                      }
+                  });
+              }
+
+              private boolean isLampiao(ServerPlayerEntity player) {
+
+                  return hasLampiao(player.getMainHandStack())
+                          || hasLampiao(player.getOffHandStack());
+              }
+
+              private boolean hasLampiao(ItemStack stack) {
+
+                  if (stack.isEmpty()) {
+                      return false;
+                  }
+
+                  if (!stack.isOf(Items.SOUL_LANTERN)) {
+                      return false;
+                  }
+
+                  NbtComponent data =
+                          stack.get(DataComponentTypes.CUSTOM_DATA);
+
+                  if (data == null) {
+                      return false;
+                  }
+
+                  return data.copyNbt()
+                          .getBoolean(LAMPIAO_KEY)
+                          .orElse(false);
+              }
+          }
+          EOF
+
+      - name: Corrigir fabric.mod.json
+        run: |
+          cd "$PROJECT_DIR"
+
+          mkdir -p src/main/resources
+
+          cat > src/main/resources/fabric.mod.json <<'EOF'
+          {
+            "schemaVersion": 1,
+            "id": "lampiao-hidden",
+            "version": "${version}",
+            "name": "Lampiao Hidden",
+            "description": "Lampiao Lendario estilo CS4",
+            "authors": [
+              "LampiaoHidden"
+            ],
+            "environment": "*",
+            "entrypoints": {
+              "main": [
+                "com.lampiaohidden.LampiaoHidden"
+              ]
+            },
+            "depends": {
+              "fabricloader": ">=0.19.3",
+              "minecraft": "1.21.11",
+              "fabric-api": "*"
+            }
+          }
+          EOF
+
+      - name: Instalar Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.1'
+
+      - name: Compilar mod
+        run: |
+          cd "$PROJECT_DIR"
+          gradle clean build --no-daemon
+
+      - name: Verificar JAR
+        run: |
+          echo "JARs gerados:"
+          find "$PROJECT_DIR/build/libs" -type f -name "*.jar" -print
+
+      - name: Disponibilizar JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: lampiao-hidden
+          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
+          if-no-files-found: error
                      
