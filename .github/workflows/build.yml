@@ -22,13 +22,12 @@ jobs:
         run: |
           rm -rf projeto
           mkdir projeto
-
           unzip -q lampiao-hidden-do-zero.zip -d projeto
 
-          echo "Conteúdo extraído:"
-          find projeto -maxdepth 3 -type f
+          echo "Arquivos encontrados:"
+          find projeto -maxdepth 4 -type f
 
-      - name: Encontrar pasta do projeto
+      - name: Encontrar projeto
         run: |
           PROJECT_DIR=$(find projeto -name build.gradle -type f -print -quit | xargs dirname)
 
@@ -37,7 +36,7 @@ jobs:
             exit 1
           fi
 
-          echo "Projeto encontrado em: $PROJECT_DIR"
+          echo "Projeto: $PROJECT_DIR"
           echo "PROJECT_DIR=$PROJECT_DIR" >> "$GITHUB_ENV"
 
       - name: Corrigir build.gradle
@@ -67,11 +66,8 @@ jobs:
 
           dependencies {
               minecraft "com.mojang:minecraft:${project.minecraft_version}"
-
               mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
-
               modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
-
               modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
           }
 
@@ -89,7 +85,6 @@ jobs:
 
           java {
               withSourcesJar()
-
               sourceCompatibility = JavaVersion.VERSION_21
               targetCompatibility = JavaVersion.VERSION_21
           }
@@ -109,7 +104,7 @@ jobs:
           fabric_version=0.141.6+1.21.11
 
           mod_version=1.0.0
-          maven_group=com.jczzwt
+          maven_group=com.lampiaohidden
           archives_base_name=lampiao-hidden
           EOF
 
@@ -117,286 +112,17 @@ jobs:
         run: |
           cd "$PROJECT_DIR"
 
-          mkdir -p src/main/java/com/jczzwt/lampiaohidden
+          mkdir -p src/main/java/com/lampiaohidden
 
-          cat > src/main/java/com/jczzwt/lampiaohidden/LampiaoHidden.java <<'EOF'
-          package com.jczzwt.lampiaohidden;
+          cat > src/main/java/com/lampiaohidden/LampiaoHidden.java <<'EOF'
+          package com.lampiaohidden;
 
-          import com.mojang.datafixers.util.Pair;
           import net.fabricmc.api.ModInitializer;
           import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents;
           import net.minecraft.component.DataComponentTypes;
           import net.minecraft.component.type.NbtComponent;
-          import net.minecraft.entity.EquipmentSlot;
+          import net.minecraft.entity.effect.StatusEffectInstance;
           import net.minecraft.entity.effect.StatusEffects;
           import net.minecraft.item.ItemStack;
-          import net.minecraft.item.Items;
-          import net.minecraft.network.packet.s2c.play.EntityEquipmentUpdateS2CPacket;
-          import net.minecraft.server.MinecraftServer;
-          import net.minecraft.server.network.ServerPlayerEntity;
-
-          import java.util.ArrayList;
-          import java.util.HashMap;
-          import java.util.List;
-          import java.util.Map;
-          import java.util.UUID;
-
-          public class LampiaoHidden implements ModInitializer {
-
-              private static final String LAMPIAO_KEY = "lampiao_lendario";
-
-              private final Map<UUID, Boolean> states = new HashMap<>();
-
-              @Override
-              public void onInitialize() {
-
-                  ServerTickEvents.END_SERVER_TICK.register(server -> {
-
-                      for (ServerPlayerEntity player :
-                              server.getPlayerManager().getPlayerList()) {
-
-                          boolean active = isLampiao(player);
-
-                          boolean previous =
-                                  states.getOrDefault(
-                                          player.getUuid(),
-                                          false
-                                  );
-
-                          /*
-                           * Se não estiver usando o Lampião,
-                           * garante que o jogador não fique
-                           * invisível.
-                           */
-                          if (!active) {
-                              player.removeStatusEffect(
-                                      StatusEffects.INVISIBILITY
-                              );
-                          }
-
-                          /*
-                           * Só envia os pacotes quando o estado
-                           * muda.
-                           */
-                          if (active != previous) {
-
-                              states.put(
-                                      player.getUuid(),
-                                      active
-                              );
-
-                              if (active) {
-                                  hideEquipment(server, player);
-                              } else {
-                                  showEquipment(server, player);
-                              }
-                          }
-                      }
-                  });
-              }
-
-              private boolean isLampiao(
-                      ServerPlayerEntity player) {
-
-                  return hasLampiao(
-                              player.getMainHandStack()
-                         )
-                         ||
-                         hasLampiao(
-                              player.getOffHandStack()
-                         );
-              }
-
-              private boolean hasLampiao(
-                      ItemStack stack) {
-
-                  if (stack.isEmpty()) {
-                      return false;
-                  }
-
-                  if (!stack.isOf(Items.SOUL_LANTERN)) {
-                      return false;
-                  }
-
-                  NbtComponent data =
-                          stack.get(
-                                  DataComponentTypes.CUSTOM_DATA
-                          );
-
-                  if (data == null) {
-                      return false;
-                  }
-
-                  return data.copyNbt()
-                          .getBoolean(LAMPIAO_KEY)
-                          .orElse(false);
-              }
-
-              private void hideEquipment(
-                      MinecraftServer server,
-                      ServerPlayerEntity player) {
-
-                  List<Pair<EquipmentSlot, ItemStack>> equipment =
-                          new ArrayList<>();
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.MAINHAND,
-                                  ItemStack.EMPTY
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.OFFHAND,
-                                  ItemStack.EMPTY
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.HEAD,
-                                  ItemStack.EMPTY
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.CHEST,
-                                  ItemStack.EMPTY
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.LEGS,
-                                  ItemStack.EMPTY
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.FEET,
-                                  ItemStack.EMPTY
-                          )
-                  );
-
-                  sendEquipment(
-                          server,
-                          player,
-                          equipment
-                  );
-              }
-
-              private void showEquipment(
-                      MinecraftServer server,
-                      ServerPlayerEntity player) {
-
-                  List<Pair<EquipmentSlot, ItemStack>> equipment =
-                          new ArrayList<>();
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.MAINHAND,
-                                  player.getEquippedStack(
-                                          EquipmentSlot.MAINHAND
-                                  ).copy()
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.OFFHAND,
-                                  player.getEquippedStack(
-                                          EquipmentSlot.OFFHAND
-                                  ).copy()
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.HEAD,
-                                  player.getEquippedStack(
-                                          EquipmentSlot.HEAD
-                                  ).copy()
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.CHEST,
-                                  player.getEquippedStack(
-                                          EquipmentSlot.CHEST
-                                  ).copy()
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.LEGS,
-                                  player.getEquippedStack(
-                                          EquipmentSlot.LEGS
-                                  ).copy()
-                          )
-                  );
-
-                  equipment.add(
-                          Pair.of(
-                                  EquipmentSlot.FEET,
-                                  player.getEquippedStack(
-                                          EquipmentSlot.FEET
-                                  ).copy()
-                          )
-                  );
-
-                  sendEquipment(
-                          server,
-                          player,
-                          equipment
-                  );
-              }
-
-              private void sendEquipment(
-                      MinecraftServer server,
-                      ServerPlayerEntity player,
-                      List<Pair<EquipmentSlot, ItemStack>> equipment) {
-
-                  EntityEquipmentUpdateS2CPacket packet =
-                          new EntityEquipmentUpdateS2CPacket(
-                                  player.getId(),
-                                  equipment
-                          );
-
-                  for (ServerPlayerEntity viewer :
-                          server.getPlayerManager()
-                                  .getPlayerList()) {
-
-                      /*
-                       * O próprio jogador nunca recebe
-                       * o pacote de esconder.
-                       */
-                      if (viewer != player) {
-                          viewer.networkHandler.sendPacket(packet);
-                      }
-                  }
-              }
-          }
-          EOF
-
-      - name: Instalar Gradle
-        uses: gradle/actions/setup-gradle@v4
-        with:
-          gradle-version: '9.6.1'
-
-      - name: Compilar mod
-        run: |
-          cd "$PROJECT_DIR"
-
-          gradle clean build --no-daemon
-
-      - name: Disponibilizar JAR
-        uses: actions/upload-artifact@v4
-        with:
-          name: lampiao-hidden
-          path: ${{ env.PROJECT_DIR }}/build/libs/*.jar
+          import net.minecraft
                      
